@@ -62,13 +62,25 @@ function probBar(label, value) {
     </div>`;
 }
 
-function formChips(form) {
+function formChips(form, teamName) {
   if (!form.matches || form.matches.length === 0) {
     return '<span class="no-data">No recent results found</span>';
   }
   const sourceTag = form.source === "espn" ? ' <span class="source-tag">via ESPN</span>' : "";
   const chips = form.matches
-    .map((m) => `<span class="chip chip-${m.result}" title="${m.opponent}: ${m.score}">${m.result}</span>`)
+    .map(
+      (m) => `<span
+        class="chip chip-${m.result}"
+        title="${m.opponent}: ${m.score}"
+        data-team="${escapeAttr(teamName)}"
+        data-opponent="${escapeAttr(m.opponent)}"
+        data-goals-for="${m.goals_for}"
+        data-goals-against="${m.goals_against}"
+        data-date="${escapeAttr(m.date || "Unknown date")}"
+        data-league="${escapeAttr(m.league)}"
+        data-result="${m.result}"
+      >${m.result}</span>`
+    )
     .join("");
   return `<span class="chips">${chips}</span> <span class="no-data">${form.record}</span>${sourceTag}`;
 }
@@ -129,8 +141,8 @@ function matchCard(match) {
       </div>
 
       <div class="section-title">Recent Form</div>
-      <div class="form-row"><span>${match.home_team}</span>${formChips(match.home_form)}</div>
-      <div class="form-row"><span>${match.away_team}</span>${formChips(match.away_form)}</div>
+      <div class="form-row"><span>${match.home_team}</span>${formChips(match.home_form, match.home_team)}</div>
+      <div class="form-row"><span>${match.away_team}</span>${formChips(match.away_form, match.away_team)}</div>
 
       <div class="section-title">Head-to-Head</div>
       ${h2hList(match.head_to_head)}
@@ -143,6 +155,7 @@ function escapeAttr(value) {
 }
 
 function render() {
+  closeFormPopover(); // cards are about to be rebuilt, so any open popover would go stale
   const filter = confidenceFilterEl.value;
   const filtered =
     filter === "all" ? lastMatches : lastMatches.filter((m) => m.prediction.confidence === filter);
@@ -312,6 +325,11 @@ function closeLiveModal() {
 }
 
 matchesEl.addEventListener("click", (event) => {
+  const chip = event.target.closest(".chip");
+  if (chip) {
+    toggleFormPopover(chip);
+    return;
+  }
   const h2hBtn = event.target.closest(".h2h-view-more");
   if (h2hBtn) {
     openH2HModal(h2hBtn.dataset.home, h2hBtn.dataset.away, h2hBtn.dataset.league);
@@ -331,7 +349,56 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeLiveModal();
     closeH2HModal();
+    closeFormPopover();
   }
+});
+
+// --- Recent-form chip click -> match score preview popover ---
+const RESULT_LABELS = { W: "Win", D: "Draw", L: "Loss" };
+let formPopoverEl = null;
+let formPopoverForChip = null;
+
+function closeFormPopover() {
+  if (formPopoverEl) {
+    formPopoverEl.remove();
+    formPopoverEl = null;
+    formPopoverForChip = null;
+  }
+}
+
+function toggleFormPopover(chip) {
+  const reopeningSameChip = formPopoverForChip === chip;
+  closeFormPopover();
+  if (reopeningSameChip) return;
+
+  const { team, opponent, goalsFor, goalsAgainst, date, league, result } = chip.dataset;
+  const popover = document.createElement("div");
+  popover.className = "form-popover";
+  popover.innerHTML = `
+    <div class="form-popover-result form-popover-${result}">${RESULT_LABELS[result] || result}</div>
+    <div class="form-popover-score">${team} ${goalsFor} &ndash; ${goalsAgainst} ${opponent}</div>
+    <div class="form-popover-meta">${date} &middot; ${league}</div>`;
+  document.body.appendChild(popover);
+
+  const rect = chip.getBoundingClientRect();
+  const popRect = popover.getBoundingClientRect();
+  let left = rect.left + rect.width / 2 - popRect.width / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - popRect.width - 8));
+  let top = rect.bottom + 8;
+  if (top + popRect.height > window.innerHeight - 8) {
+    top = rect.top - popRect.height - 8;
+  }
+  popover.style.left = `${left}px`;
+  popover.style.top = `${top}px`;
+
+  formPopoverEl = popover;
+  formPopoverForChip = chip;
+}
+
+document.addEventListener("click", (event) => {
+  if (!formPopoverEl) return;
+  if (event.target.closest(".chip") || event.target.closest(".form-popover")) return;
+  closeFormPopover();
 });
 
 // --- Head-to-head "view more" modal ---

@@ -318,11 +318,56 @@ main {
   font-size: 0.65rem;
   font-weight: 700;
   color: white;
+  cursor: pointer;
+}
+
+.chip:hover {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
 }
 
 .chip-W { background: var(--green); }
 .chip-D { background: var(--amber); }
 .chip-L { background: var(--red); }
+
+.form-popover {
+  position: fixed;
+  z-index: 200;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.8rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  max-width: 220px;
+  text-align: center;
+}
+
+.form-popover-result {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+  color: white;
+}
+
+.form-popover-W { background: var(--green); }
+.form-popover-D { background: var(--amber); }
+.form-popover-L { background: var(--red); }
+
+.form-popover-score {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.form-popover-meta {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+}
 
 .h2h-list {
   font-size: 0.8rem;
