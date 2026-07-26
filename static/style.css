@@ -206,6 +206,12 @@ main {
   animation: flash-down 2.5s ease-out;
 }
 
+.live-tag {
+  color: var(--red);
+  font-weight: 700;
+  font-size: 0.65rem;
+}
+
 @keyframes flash-up {
   0% { background: rgba(62, 207, 142, 0.45); border-color: var(--green); }
   100% { background: #10182a; border-color: var(--border); }
@@ -341,6 +347,42 @@ main {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   max-width: 220px;
   text-align: center;
+}
+
+.ai-analysis-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  background: linear-gradient(90deg, rgba(91, 141, 239, 0.15), rgba(62, 207, 142, 0.15));
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 8px;
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ai-analysis-btn:hover {
+  background: linear-gradient(90deg, rgba(91, 141, 239, 0.25), rgba(62, 207, 142, 0.25));
+}
+
+.ai-modal-body {
+  text-align: left;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  margin: 16px 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.ai-modal-disclaimer {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  font-style: italic;
 }
 
 .form-popover-result {

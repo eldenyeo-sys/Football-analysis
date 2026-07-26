@@ -2,6 +2,7 @@ from datetime import datetime
 
 from flask import Flask, jsonify, request, send_from_directory
 
+import ai_analysis
 import analysis
 import espn_client
 import sgodds_client
@@ -58,15 +59,15 @@ def api_matches():
         away_form = _form_with_fallback(pool, match.away_team)
         h2h = _head_to_head_with_fallback(pool, match.league, match.home_team, match.away_team)
 
-        prediction = analysis.predict(
-            match.odds_home, match.odds_draw, match.odds_away, home_form, away_form
-        )
-
         live_score = None
         if match.is_live:
             live_score = espn_client.get_live_score(
                 match.home_team, match.away_team, match.league, match.kickoff
             )
+
+        prediction = analysis.predict(
+            match.odds_home, match.odds_draw, match.odds_away, home_form, away_form, live_score
+        )
 
         payload.append(
             {
@@ -145,6 +146,23 @@ def api_head_to_head():
             "summary": summary,
         }
     )
+
+
+@app.route("/api/ai-analysis", methods=["POST"])
+def api_ai_analysis():
+    """Generates a short natural-language writeup from data the frontend already
+    has (odds, form, H2H) -- the client sends that data along, so this doesn't
+    re-scrape or recompute the underlying analysis, just narrates it."""
+    match_context = request.get_json(silent=True) or {}
+    if not match_context.get("home_team") or not match_context.get("away_team"):
+        return jsonify({"error": "home_team and away_team are required"}), 400
+
+    try:
+        text = ai_analysis.generate_analysis(match_context)
+    except ai_analysis.AIAnalysisError as exc:
+        return jsonify({"error": str(exc)}), 502
+
+    return jsonify({"generated_at": datetime.now().isoformat(), "analysis": text})
 
 
 if __name__ == "__main__":

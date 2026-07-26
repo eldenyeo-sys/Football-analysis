@@ -5,6 +5,7 @@ for informational purposes only -- not a trained model and not betting advice.
 """
 
 import math
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -208,10 +209,64 @@ def confidence_label(top_prob: float) -> str:
     return "Low"
 
 
-def predict(odds_home, odds_draw, odds_away, home_form: dict, away_form: dict) -> dict:
+def parse_match_minute(status: Optional[str]) -> Optional[int]:
+    """Best-effort minute-of-match from an ESPN-style status string
+    ("63'", "45'+2'", "HT", "FT"). Returns None if it can't be parsed --
+    callers should treat that as "unknown, assume roughly half-time"."""
+    if not status:
+        return None
+    s = status.strip().upper()
+    if s in ("HT", "HALFTIME", "HALF-TIME"):
+        return 45
+    if s in ("FT", "FULL TIME", "FULL-TIME", "AET", "PEN"):
+        return 90
+    match = re.match(r"(\d+)", s)
+    if match:
+        return min(90, int(match.group(1)))
+    return None
+
+
+def live_score_adjustment(pre_match_prob: dict, live_score: Optional[dict]) -> dict:
+    """Re-weights the pre-match probabilities against what's actually happening
+    on the pitch. The live scoreline gets more say the further into the match
+    we are -- a 1-0 lead at kickoff barely moves the needle, the same lead in
+    the 85th minute should dominate."""
+    if not live_score:
+        return pre_match_prob
+
+    try:
+        home_goals = int(live_score.get("home"))
+        away_goals = int(live_score.get("away"))
+    except (TypeError, ValueError):
+        return pre_match_prob
+
+    minute = parse_match_minute(live_score.get("status"))
+    elapsed = 0.5 if minute is None else min(1.0, minute / 90)
+    goal_diff = home_goals - away_goals
+
+    if goal_diff == 0:
+        # A goalless or level scoreline makes a draw more credible than the
+        # pre-match line implied, growing as the clock runs down.
+        live_prob = {"home": 0.28, "draw": 0.44, "away": 0.28}
+        live_weight = 0.25 + 0.35 * elapsed
+    else:
+        intensity = 1.0 + 2.5 * elapsed  # a late lead is worth much more than an early one
+        live_prob = _outcome_probabilities_from_diff(goal_diff * intensity)
+        live_weight = min(0.93, 0.35 + 0.55 * elapsed)
+
+    blended = {
+        key: live_weight * live_prob[key] + (1 - live_weight) * pre_match_prob[key]
+        for key in ("home", "draw", "away")
+    }
+    total = sum(blended.values())
+    return {key: value / total for key, value in blended.items()}
+
+
+def predict(odds_home, odds_draw, odds_away, home_form: dict, away_form: dict, live_score: Optional[dict] = None) -> dict:
     market_prob = implied_probabilities(odds_home, odds_draw, odds_away)
     form_prob = form_probabilities(home_form, away_form)
     probabilities = blend(market_prob, form_prob)
+    probabilities = live_score_adjustment(probabilities, live_score)
 
     outcome = max(probabilities, key=probabilities.get)
     outcome_label = {"home": "Home Win", "draw": "Draw", "away": "Away Win"}[outcome]
@@ -221,4 +276,5 @@ def predict(odds_home, odds_draw, odds_away, home_form: dict, away_form: dict) -
         "probabilities": {k: round(v * 100, 1) for k, v in probabilities.items()},
         "confidence": confidence_label(probabilities[outcome]),
         "market_based": market_prob is not None,
+        "live_adjusted": live_score is not None and live_score.get("home") is not None,
     }

@@ -132,7 +132,7 @@ function matchCard(match) {
 
       <div class="prediction">
         <strong>${p.outcome}</strong>
-        <span class="confidence-badge confidence-${p.confidence}">${p.confidence} confidence (${topProbability(p.probabilities)}%)</span>
+        <span class="confidence-badge confidence-${p.confidence}">${p.confidence} confidence (${topProbability(p.probabilities)}%)${p.live_adjusted ? ' <span class="live-tag">&#9679; live</span>' : ""}</span>
       </div>
       <div class="prob-bars">
         ${probBar("Home", p.probabilities.home)}
@@ -147,6 +147,8 @@ function matchCard(match) {
       <div class="section-title">Head-to-Head</div>
       ${h2hList(match.head_to_head)}
       <button class="h2h-view-more" data-home="${escapeAttr(match.home_team)}" data-away="${escapeAttr(match.away_team)}" data-league="${escapeAttr(match.league)}">View more &rarr;</button>
+
+      <button class="ai-analysis-btn" data-match-id="${match.match_id}">&#10024; AI Analysis</button>
     </div>`;
 }
 
@@ -335,6 +337,12 @@ matchesEl.addEventListener("click", (event) => {
     openH2HModal(h2hBtn.dataset.home, h2hBtn.dataset.away, h2hBtn.dataset.league);
     return;
   }
+  const aiBtn = event.target.closest(".ai-analysis-btn");
+  if (aiBtn) {
+    const match = lastMatches.find((m) => String(m.match_id) === aiBtn.dataset.matchId);
+    if (match) openAIModal(match);
+    return;
+  }
   const card = event.target.closest(".card.is-live");
   if (!card) return;
   const match = lastMatches.find((m) => String(m.match_id) === card.dataset.matchId);
@@ -350,7 +358,68 @@ document.addEventListener("keydown", (event) => {
     closeLiveModal();
     closeH2HModal();
     closeFormPopover();
+    closeAIModal();
   }
+});
+
+// --- AI Analysis modal ---
+const aiModalBackdrop = document.getElementById("ai-modal-backdrop");
+const aiModalClose = document.getElementById("ai-modal-close");
+const aiModalTitle = document.getElementById("ai-modal-title");
+const aiModalBody = document.getElementById("ai-modal-body");
+
+function buildAIContext(match) {
+  return {
+    home_team: match.home_team,
+    away_team: match.away_team,
+    league: match.league,
+    odds: match.odds,
+    prediction: match.prediction,
+    home_form: {
+      record: match.home_form.record,
+      ppg: match.home_form.ppg,
+      gd_pg: match.home_form.gd_pg,
+    },
+    away_form: {
+      record: match.away_form.record,
+      ppg: match.away_form.ppg,
+      gd_pg: match.away_form.gd_pg,
+    },
+    head_to_head: (match.head_to_head || [])
+      .slice(0, 5)
+      .map((m) => `${m.date}: ${m.home_team} ${m.score} ${m.away_team} (${m.league})`),
+  };
+}
+
+async function openAIModal(match) {
+  aiModalTitle.textContent = `${match.home_team} vs ${match.away_team}`;
+  aiModalBody.innerHTML = '<p class="no-data">Generating analysis&hellip;</p>';
+  aiModalBackdrop.classList.remove("hidden");
+
+  try {
+    const res = await fetch("/api/ai-analysis", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildAIContext(match)),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      aiModalBody.innerHTML = `<p class="no-data">Couldn't generate analysis: ${data.error || res.statusText}</p>`;
+      return;
+    }
+    aiModalBody.textContent = data.analysis;
+  } catch (err) {
+    aiModalBody.innerHTML = `<p class="no-data">Couldn't reach the server: ${err.message}</p>`;
+  }
+}
+
+function closeAIModal() {
+  aiModalBackdrop.classList.add("hidden");
+}
+
+aiModalClose.addEventListener("click", closeAIModal);
+aiModalBackdrop.addEventListener("click", (event) => {
+  if (event.target === aiModalBackdrop) closeAIModal();
 });
 
 // --- Recent-form chip click -> match score preview popover ---
