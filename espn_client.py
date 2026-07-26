@@ -185,7 +185,7 @@ def get_team_recent_results(team_name: str, n: int = 5) -> list:
     return scored
 
 
-def get_head_to_head(home_team: str, away_team: str, seasons_back: int = 3) -> list:
+def get_head_to_head(home_team: str, away_team: str, seasons_back: int = 3, limit: int = 5) -> list:
     team = find_team(home_team)
     if not team or not team.get("league"):
         return []
@@ -202,7 +202,7 @@ def get_head_to_head(home_team: str, away_team: str, seasons_back: int = 3) -> l
             "score": f"{m['home_score']}-{m['away_score']}",
             "league": "ESPN",
         }
-        for m in meetings[:5]
+        for m in meetings[:limit]
     ]
 
 

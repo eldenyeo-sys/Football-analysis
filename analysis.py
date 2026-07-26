@@ -119,6 +119,50 @@ def head_to_head(pool, home_team: str, away_team: str) -> list:
     ]
 
 
+def head_to_head_summary(meetings: list, team_a: str, team_b: str) -> dict:
+    """Aggregates a list of head-to-head meeting dicts (date/home_team/away_team/score)
+    into a W-D-L / goals record from team_a's perspective, regardless of which
+    side was home in each individual past meeting."""
+    a_wins = b_wins = draws = 0
+    a_goals = b_goals = 0
+    counted = 0
+
+    for m in meetings:
+        score = m.get("score") or ""
+        if "-" not in score:
+            continue
+        try:
+            home_goals, away_goals = (int(x) for x in score.split("-", 1))
+        except ValueError:
+            continue
+
+        home_is_a = m["home_team"].lower() == team_a.lower()
+        home_is_b = m["home_team"].lower() == team_b.lower()
+        if not (home_is_a or home_is_b):
+            continue
+
+        a_goals_this, b_goals_this = (home_goals, away_goals) if home_is_a else (away_goals, home_goals)
+        a_goals += a_goals_this
+        b_goals += b_goals_this
+        counted += 1
+        if a_goals_this > b_goals_this:
+            a_wins += 1
+        elif a_goals_this < b_goals_this:
+            b_wins += 1
+        else:
+            draws += 1
+
+    return {
+        "meetings_count": counted,
+        "team_a_wins": a_wins,
+        "team_b_wins": b_wins,
+        "draws": draws,
+        "team_a_goals": a_goals,
+        "team_b_goals": b_goals,
+        "avg_goals_per_game": round((a_goals + b_goals) / counted, 2) if counted else None,
+    }
+
+
 def _outcome_probabilities_from_diff(diff: float) -> dict:
     """Maps a home-strength-minus-away-strength differential to a 3-way
     outcome distribution via a logistic curve, with draw probability

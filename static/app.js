@@ -73,6 +73,10 @@ function formChips(form) {
   return `<span class="chips">${chips}</span> <span class="no-data">${form.record}</span>${sourceTag}`;
 }
 
+function topProbability(probabilities) {
+  return Math.max(probabilities.home, probabilities.draw, probabilities.away);
+}
+
 function h2hList(h2h) {
   if (!h2h || h2h.length === 0) {
     return '<p class="no-data">No meeting found in the currently available data window.</p>';
@@ -116,7 +120,7 @@ function matchCard(match) {
 
       <div class="prediction">
         <strong>${p.outcome}</strong>
-        <span class="confidence-badge confidence-${p.confidence}">${p.confidence} confidence</span>
+        <span class="confidence-badge confidence-${p.confidence}">${p.confidence} confidence (${topProbability(p.probabilities)}%)</span>
       </div>
       <div class="prob-bars">
         ${probBar("Home", p.probabilities.home)}
@@ -130,7 +134,12 @@ function matchCard(match) {
 
       <div class="section-title">Head-to-Head</div>
       ${h2hList(match.head_to_head)}
+      <button class="h2h-view-more" data-home="${escapeAttr(match.home_team)}" data-away="${escapeAttr(match.away_team)}" data-league="${escapeAttr(match.league)}">View more &rarr;</button>
     </div>`;
+}
+
+function escapeAttr(value) {
+  return String(value).replace(/"/g, "&quot;");
 }
 
 function render() {
@@ -303,6 +312,11 @@ function closeLiveModal() {
 }
 
 matchesEl.addEventListener("click", (event) => {
+  const h2hBtn = event.target.closest(".h2h-view-more");
+  if (h2hBtn) {
+    openH2HModal(h2hBtn.dataset.home, h2hBtn.dataset.away, h2hBtn.dataset.league);
+    return;
+  }
   const card = event.target.closest(".card.is-live");
   if (!card) return;
   const match = lastMatches.find((m) => String(m.match_id) === card.dataset.matchId);
@@ -314,5 +328,80 @@ modalBackdrop.addEventListener("click", (event) => {
   if (event.target === modalBackdrop) closeLiveModal();
 });
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeLiveModal();
+  if (event.key === "Escape") {
+    closeLiveModal();
+    closeH2HModal();
+  }
+});
+
+// --- Head-to-head "view more" modal ---
+const h2hModalBackdrop = document.getElementById("h2h-modal-backdrop");
+const h2hModalClose = document.getElementById("h2h-modal-close");
+const h2hModalTitle = document.getElementById("h2h-modal-title");
+const h2hModalSummary = document.getElementById("h2h-modal-summary");
+const h2hModalList = document.getElementById("h2h-modal-list");
+
+function renderH2HSummary(summary, homeTeam, awayTeam) {
+  if (!summary || summary.meetings_count === 0) {
+    h2hModalSummary.innerHTML = '<p class="no-data">No past meetings found in the currently available data.</p>';
+    return;
+  }
+  h2hModalSummary.innerHTML = `
+    <div class="h2h-summary">
+      <div class="h2h-summary-stat"><span class="value">${summary.team_a_wins}</span><span class="label">${homeTeam} wins</span></div>
+      <div class="h2h-summary-stat"><span class="value">${summary.draws}</span><span class="label">Draws</span></div>
+      <div class="h2h-summary-stat"><span class="value">${summary.team_b_wins}</span><span class="label">${awayTeam} wins</span></div>
+    </div>
+    <div class="h2h-summary-extra">
+      ${summary.meetings_count} meeting${summary.meetings_count === 1 ? "" : "s"} &middot;
+      goals ${summary.team_a_goals}&ndash;${summary.team_b_goals} &middot;
+      avg ${summary.avg_goals_per_game} goals/game
+    </div>`;
+}
+
+function renderH2HList(meetings) {
+  if (!meetings || meetings.length === 0) {
+    h2hModalList.innerHTML = "";
+    return;
+  }
+  const items = meetings
+    .map(
+      (m) => `
+        <li>
+          <span>${m.home_team} ${m.score} ${m.away_team}</span>
+          <span class="h2h-date">${m.date} &middot; ${m.league}</span>
+        </li>`
+    )
+    .join("");
+  h2hModalList.innerHTML = `<ul>${items}</ul>`;
+}
+
+async function openH2HModal(home, away, league) {
+  h2hModalTitle.textContent = `${home} vs ${away}`;
+  h2hModalSummary.innerHTML = '<p class="no-data">Loading&hellip;</p>';
+  h2hModalList.innerHTML = "";
+  h2hModalBackdrop.classList.remove("hidden");
+
+  const params = new URLSearchParams({ home, away, league });
+  try {
+    const res = await fetch(`/api/head-to-head?${params.toString()}`);
+    const data = await res.json();
+    if (!res.ok) {
+      h2hModalSummary.innerHTML = `<p class="no-data">Couldn't load head-to-head: ${data.error || res.statusText}</p>`;
+      return;
+    }
+    renderH2HSummary(data.summary, home, away);
+    renderH2HList(data.meetings);
+  } catch (err) {
+    h2hModalSummary.innerHTML = `<p class="no-data">Couldn't reach the server: ${err.message}</p>`;
+  }
+}
+
+function closeH2HModal() {
+  h2hModalBackdrop.classList.add("hidden");
+}
+
+h2hModalClose.addEventListener("click", closeH2HModal);
+h2hModalBackdrop.addEventListener("click", (event) => {
+  if (event.target === h2hModalBackdrop) closeH2HModal();
 });

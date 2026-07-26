@@ -343,6 +343,82 @@ main {
   font-style: italic;
 }
 
+.h2h-view-more {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 6px;
+  color: var(--accent);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.h2h-view-more:hover {
+  border-color: var(--accent);
+}
+
+.h2h-summary {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin: 16px 0;
+  text-align: center;
+}
+
+.h2h-summary-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.h2h-summary-stat .value {
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.h2h-summary-stat .label {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.h2h-summary-extra {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  margin-bottom: 16px;
+}
+
+.h2h-modal-list {
+  text-align: left;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.h2h-modal-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.h2h-modal-list li {
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.h2h-modal-list .h2h-date {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
+
 .error-banner {
   margin: 20px 24px;
   padding: 14px 16px;

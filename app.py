@@ -26,7 +26,7 @@ def _form_with_fallback(pool, team_name):
     return form
 
 
-def _head_to_head_with_fallback(pool, league, home_team, away_team):
+def _head_to_head_with_fallback(pool, league, home_team, away_team, deep=False):
     h2h = analysis.head_to_head(pool, home_team, away_team)
     if h2h:
         return h2h
@@ -37,6 +37,8 @@ def _head_to_head_with_fallback(pool, league, home_team, away_team):
         if h2h:
             return h2h
 
+    if deep:
+        return espn_client.get_head_to_head(home_team, away_team, seasons_back=5, limit=15)
     return espn_client.get_head_to_head(home_team, away_team)
 
 
@@ -112,6 +114,37 @@ def api_live_score():
 
     live_score = espn_client.get_live_score(home_team, away_team, league, kickoff)
     return jsonify({"generated_at": datetime.now().isoformat(), "live_score": live_score})
+
+
+@app.route("/api/head-to-head")
+def api_head_to_head():
+    """Deeper head-to-head lookup for the 'view more' modal -- goes further back
+    (more ESPN seasons, higher limit) than the compact list shown on each card,
+    and returns an aggregate W-D-L/goals summary alongside the meeting list."""
+    home_team = request.args.get("home", "")
+    away_team = request.args.get("away", "")
+    league = request.args.get("league", "")
+
+    if not home_team or not away_team:
+        return jsonify({"error": "home and away query params are required"}), 400
+
+    try:
+        pool = sgodds_client.get_results_pool()
+    except SgoddsError:
+        pool = []
+
+    meetings = _head_to_head_with_fallback(pool, league, home_team, away_team, deep=True)
+    summary = analysis.head_to_head_summary(meetings, home_team, away_team)
+
+    return jsonify(
+        {
+            "generated_at": datetime.now().isoformat(),
+            "home_team": home_team,
+            "away_team": away_team,
+            "meetings": meetings,
+            "summary": summary,
+        }
+    )
 
 
 if __name__ == "__main__":
