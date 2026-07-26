@@ -46,6 +46,29 @@ Then open [http://localhost:5000](http://localhost:5000) in your browser.
 - `app.py` is a small Flask API (`GET /api/matches`) that the static frontend
   (`static/index.html` + `app.js`) fetches and renders, auto-refreshing every 20 seconds (with a
   visible countdown), with a client-side filter to show only High/Medium/Low confidence matches.
+- For in-play matches, confidence also factors in the live scoreline (not just pre-match
+  odds/form) — a lead is weighted more heavily the later into the match it's held. The badge
+  shows a "live" tag when this adjustment is active.
+
+## AI Analysis (optional)
+
+Clicking "✨ AI Analysis" on a match card generates a short natural-language writeup via
+**Google's Gemini API** (free tier, no credit card required) — built only from the odds/form/H2H
+already shown on that card; it's instructed not to invent facts, and results are cached for 15
+minutes per match.
+
+To enable it:
+
+1. Get a free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (sign in
+   with a Google account, no billing setup needed).
+2. Set it as an environment variable before running the app:
+   ```bash
+   export GEMINI_API_KEY="your-key-here"
+   ```
+3. Restart `python app.py`.
+
+Without a key, the button still works but shows a clear "set GEMINI_API_KEY" message instead of
+crashing.
 
 ## Deploying online (Render)
 

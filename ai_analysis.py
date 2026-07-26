@@ -1,8 +1,9 @@
 """
-Generates a short natural-language match-preview writeup via the Claude API,
-built entirely from data already computed elsewhere in the app (odds, recent
-form, head-to-head). The model synthesizes what's given; it isn't a fresh
-prediction source and doesn't get to invent facts.
+Generates a short natural-language match-preview writeup via Google's Gemini
+API (free tier, no credit card required), built entirely from data already
+computed elsewhere in the app (odds, recent form, head-to-head). The model
+synthesizes what's given; it isn't a fresh prediction source and doesn't get
+to invent facts.
 """
 
 import hashlib
@@ -11,10 +12,11 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import anthropic
+from google import genai
+from google.genai import types
 
-MODEL = "claude-opus-5"
-MAX_TOKENS = 700
+MODEL = "gemini-2.5-flash"
+MAX_OUTPUT_TOKENS = 700
 CACHE_DIR = Path(__file__).parent / "cache"
 CACHE_TTL_SECONDS = 900  # 15 min -- odds/form don't change fast enough to justify shorter
 
@@ -29,24 +31,24 @@ or historical facts that are not in the data given to you.
 - Write 3-4 short paragraphs: (1) what the market odds imply about the favourite, (2) each \
 team's recent form and what it suggests, (3) head-to-head context if any is given, or a brief \
 note that there isn't enough history to draw on, (4) a one-line takeaway tying it together.
-- Do not include internal or system XML tags (like <thinking>) in your response.
 - End with a one-sentence reminder that this is an AI-generated summary of the data above, not \
 betting advice.
 - Keep the whole thing under ~200 words. Plain prose, no headers, no markdown tables."""
 
 
 class AIAnalysisError(Exception):
-    """Raised when the analysis can't be generated (missing key, API error, refusal)."""
+    """Raised when the analysis can't be generated (missing key, API error, empty response)."""
 
 
-def _client() -> anthropic.Anthropic:
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+def _client() -> genai.Client:
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
         raise AIAnalysisError(
-            "ANTHROPIC_API_KEY is not set. Get a free key at "
-            "https://console.anthropic.com/settings/keys and set it in your environment "
+            "GEMINI_API_KEY is not set. Get a free key (no credit card needed) at "
+            "https://aistudio.google.com/apikey and set it in your environment "
             "(e.g. a .env file) to enable AI analysis."
         )
-    return anthropic.Anthropic()
+    return genai.Client(api_key=api_key)
 
 
 def _cache_path(match_context: dict) -> Path:
@@ -74,22 +76,23 @@ def generate_analysis(match_context: dict) -> str:
     )
 
     try:
-        response = client.messages.create(
+        response = client.models.generate_content(
             model=MODEL,
-            max_tokens=MAX_TOKENS,
-            output_config={"effort": "low"},
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_content}],
+            contents=user_content,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                max_output_tokens=MAX_OUTPUT_TOKENS,
+            ),
         )
-    except anthropic.APIError as exc:
-        raise AIAnalysisError(f"Claude API error: {exc}") from exc
+    except Exception as exc:  # google-genai's own exception types aren't pinned here
+        raise AIAnalysisError(f"Gemini API error: {exc}") from exc
 
-    if response.stop_reason == "refusal":
-        raise AIAnalysisError("The model declined to generate an analysis for this match.")
-
-    text = "".join(block.text for block in response.content if block.type == "text").strip()
+    text = (getattr(response, "text", None) or "").strip()
     if not text:
-        raise AIAnalysisError("The model returned an empty response.")
+        raise AIAnalysisError(
+            "Gemini returned an empty response (the request may have been blocked by "
+            "its safety filters)."
+        )
 
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"generated_at": datetime.now().isoformat(), "text": text}))
