@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Football Match Analysis</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Football Match Analysis</h1>
+    <p class="subtitle">Current + next 10 upcoming matches, with heuristic analysis and confidence levels</p>
+    <div class="toolbar">
+      <button id="refresh-btn">Refresh</button>
+      <label class="filter-label">
+        Confidence:
+        <select id="confidence-filter">
+          <option value="all">All</option>
+          <option value="High">High</option>
+          <option value="Medium">Medium</option>
+          <option value="Low">Low</option>
+        </select>
+      </label>
+      <span id="last-updated"></span>
+      <span id="countdown" class="countdown"></span>
+    </div>
+  </header>
+
+  <main id="matches"></main>
+
+  <div id="live-modal-backdrop" class="modal-backdrop hidden">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="live-modal-title">
+      <button id="live-modal-close" class="modal-close" aria-label="Close">&times;</button>
+      <div class="modal-live-badge">LIVE &mdash; watching</div>
+      <div id="live-modal-league" class="modal-league"></div>
+      <h2 id="live-modal-title" class="modal-teams"></h2>
+      <div id="live-modal-score" class="modal-score">&ndash;</div>
+      <div id="live-modal-status" class="modal-status"></div>
+      <div id="live-modal-note" class="modal-note"></div>
+      <div id="live-modal-venue" class="modal-venue"></div>
+      <div id="live-modal-events" class="modal-events"></div>
+      <div class="modal-refresh">Refreshing every 5s &middot; <span id="live-modal-updated"></span></div>
+    </div>
+  </div>
+
+  <footer>
+    <p>
+      Odds and results are sourced from <a href="https://sgodds.com" target="_blank" rel="noopener">sgodds.com</a>,
+      a third-party site that mirrors Singapore Pools football odds (updated roughly every 10 minutes) &mdash;
+      not official, live, or real-time Singapore Pools data. Predictions are a simple heuristic blend of market
+      odds and recent form, for informational purposes only. This is <strong>not betting advice</strong>.
+      If gambling is affecting you or someone you know, call the National Problem Gambling Helpline at
+      1800-6-668-668.
+    </p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

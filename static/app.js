@@ -1,0 +1,318 @@
+const REFRESH_INTERVAL_MS = 20 * 1000;
+
+const matchesEl = document.getElementById("matches");
+const lastUpdatedEl = document.getElementById("last-updated");
+const refreshBtn = document.getElementById("refresh-btn");
+const countdownEl = document.getElementById("countdown");
+const confidenceFilterEl = document.getElementById("confidence-filter");
+
+let secondsUntilRefresh = REFRESH_INTERVAL_MS / 1000;
+let lastMatches = [];
+let previousOdds = {}; // match_id -> {home, draw, away}, used to flash changed odds
+
+function tickCountdown() {
+  secondsUntilRefresh -= 1;
+  if (secondsUntilRefresh <= 0) {
+    secondsUntilRefresh = REFRESH_INTERVAL_MS / 1000;
+  }
+  const m = Math.floor(secondsUntilRefresh / 60);
+  const s = String(secondsUntilRefresh % 60).padStart(2, "0");
+  countdownEl.textContent = `Auto-refresh in ${m}:${s}`;
+}
+
+function fmtKickoff(iso, isLive) {
+  if (isLive) return "LIVE";
+  if (!iso) return "Time TBC";
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function oddsChip(label, value, direction) {
+  const dirClass = direction ? ` odds-changed odds-${direction}` : "";
+  const arrow = direction === "up" ? " &#9650;" : direction === "down" ? " &#9660;" : "";
+  return `<div class="odds-chip${dirClass}"><span class="label">${label}</span>${value ?? "-"}${arrow}</div>`;
+}
+
+function computeOddsChanges(matchId, odds) {
+  const prev = previousOdds[matchId];
+  const changes = { home: null, draw: null, away: null };
+  if (prev) {
+    for (const key of ["home", "draw", "away"]) {
+      if (typeof odds[key] === "number" && typeof prev[key] === "number" && odds[key] !== prev[key]) {
+        changes[key] = odds[key] > prev[key] ? "up" : "down";
+      }
+    }
+  }
+  previousOdds[matchId] = { ...odds };
+  return changes;
+}
+
+function probBar(label, value) {
+  return `
+    <div class="prob-bar-row">
+      <span class="prob-bar-label">${label}</span>
+      <div class="prob-bar-track"><div class="prob-bar-fill" style="width:${value}%"></div></div>
+      <span class="prob-bar-value">${value}%</span>
+    </div>`;
+}
+
+function formChips(form) {
+  if (!form.matches || form.matches.length === 0) {
+    return '<span class="no-data">No recent results found</span>';
+  }
+  const sourceTag = form.source === "espn" ? ' <span class="source-tag">via ESPN</span>' : "";
+  const chips = form.matches
+    .map((m) => `<span class="chip chip-${m.result}" title="${m.opponent}: ${m.score}">${m.result}</span>`)
+    .join("");
+  return `<span class="chips">${chips}</span> <span class="no-data">${form.record}</span>${sourceTag}`;
+}
+
+function h2hList(h2h) {
+  if (!h2h || h2h.length === 0) {
+    return '<p class="no-data">No meeting found in the currently available data window.</p>';
+  }
+  const items = h2h
+    .map((m) => `<li>${m.date} &middot; ${m.home_team} ${m.score} ${m.away_team} (${m.league})</li>`)
+    .join("");
+  return `<ul class="h2h-list">${items}</ul>`;
+}
+
+function liveScoreBadge(match) {
+  if (!match.is_live) return "";
+  if (!match.live_score) {
+    return '<div class="live-score live-score-unknown">Live &mdash; score unavailable</div>';
+  }
+  const ls = match.live_score;
+  return `
+    <div class="live-score">
+      <span class="live-score-value">${match.home_team} ${ls.home} - ${ls.away} ${match.away_team}</span>
+      <span class="live-score-status">${ls.status || ""}</span>
+    </div>`;
+}
+
+function matchCard(match) {
+  const p = match.prediction;
+  return `
+    <div class="card${match.is_live ? " is-live" : ""}" data-confidence="${p.confidence}" data-match-id="${match.match_id}">
+      <div class="card-header">
+        <span>${match.league}</span>
+        <span class="${match.is_live ? "live-badge" : ""}">${fmtKickoff(match.kickoff, match.is_live)}</span>
+      </div>
+      <div class="teams">${match.home_team} vs ${match.away_team}</div>
+      ${match.is_live ? '<div class="watch-live-hint">Tap to watch live &rarr;</div>' : ""}
+      ${liveScoreBadge(match)}
+
+      <div class="odds-row">
+        ${oddsChip("1 (Home)", match.odds.home, match.oddsChange?.home)}
+        ${oddsChip("X (Draw)", match.odds.draw, match.oddsChange?.draw)}
+        ${oddsChip("2 (Away)", match.odds.away, match.oddsChange?.away)}
+      </div>
+
+      <div class="prediction">
+        <strong>${p.outcome}</strong>
+        <span class="confidence-badge confidence-${p.confidence}">${p.confidence} confidence</span>
+      </div>
+      <div class="prob-bars">
+        ${probBar("Home", p.probabilities.home)}
+        ${probBar("Draw", p.probabilities.draw)}
+        ${probBar("Away", p.probabilities.away)}
+      </div>
+
+      <div class="section-title">Recent Form</div>
+      <div class="form-row"><span>${match.home_team}</span>${formChips(match.home_form)}</div>
+      <div class="form-row"><span>${match.away_team}</span>${formChips(match.away_form)}</div>
+
+      <div class="section-title">Head-to-Head</div>
+      ${h2hList(match.head_to_head)}
+    </div>`;
+}
+
+function render() {
+  const filter = confidenceFilterEl.value;
+  const filtered =
+    filter === "all" ? lastMatches : lastMatches.filter((m) => m.prediction.confidence === filter);
+
+  if (filtered.length === 0) {
+    matchesEl.innerHTML = `<div class="error-banner">No matches match the "${filter}" confidence filter right now.</div>`;
+    return;
+  }
+  matchesEl.innerHTML = filtered.map(matchCard).join("");
+}
+
+async function loadMatches() {
+  refreshBtn.disabled = true;
+  refreshBtn.textContent = "Loading...";
+  try {
+    const res = await fetch("/api/matches");
+    const data = await res.json();
+
+    if (!res.ok) {
+      matchesEl.innerHTML = `<div class="error-banner">Couldn't load data: ${data.error || res.statusText}</div>`;
+      return;
+    }
+
+    if (!data.matches || data.matches.length === 0) {
+      matchesEl.innerHTML = `<div class="error-banner">No upcoming matches found right now.</div>`;
+      return;
+    }
+
+    for (const match of data.matches) {
+      match.oddsChange = computeOddsChanges(match.match_id, match.odds);
+    }
+    lastMatches = data.matches;
+    render();
+    lastUpdatedEl.textContent = `Last updated ${new Date(data.generated_at).toLocaleTimeString()}`;
+    secondsUntilRefresh = REFRESH_INTERVAL_MS / 1000;
+  } catch (err) {
+    matchesEl.innerHTML = `<div class="error-banner">Couldn't reach the server: ${err.message}</div>`;
+  } finally {
+    refreshBtn.disabled = false;
+    refreshBtn.textContent = "Refresh";
+  }
+}
+
+refreshBtn.addEventListener("click", () => loadMatches());
+confidenceFilterEl.addEventListener("change", () => render());
+
+matchesEl.innerHTML = '<div class="loading">Loading matches...</div>';
+loadMatches();
+setInterval(loadMatches, REFRESH_INTERVAL_MS);
+setInterval(tickCountdown, 1000);
+tickCountdown();
+
+// --- Live match-tracker modal ---
+const LIVE_POLL_INTERVAL_MS = 5 * 1000;
+
+const modalBackdrop = document.getElementById("live-modal-backdrop");
+const modalClose = document.getElementById("live-modal-close");
+const modalLeague = document.getElementById("live-modal-league");
+const modalTitle = document.getElementById("live-modal-title");
+const modalScore = document.getElementById("live-modal-score");
+const modalStatus = document.getElementById("live-modal-status");
+const modalNote = document.getElementById("live-modal-note");
+const modalVenue = document.getElementById("live-modal-venue");
+const modalEvents = document.getElementById("live-modal-events");
+const modalUpdated = document.getElementById("live-modal-updated");
+
+let liveModalMatch = null;
+let liveModalTimer = null;
+
+const EVENT_ICONS = {
+  Goal: "⚽",
+  "Own Goal": "⚽🔄",
+  "Penalty - Scored": "⚽",
+  "Yellow Card": "🟨",
+  "Red Card": "🟥",
+  Substitution: "🔁",
+};
+
+function renderVenue(venue) {
+  if (!venue || !venue.name) {
+    modalVenue.textContent = "";
+    return;
+  }
+  const place = [venue.city, venue.country].filter(Boolean).join(", ");
+  modalVenue.textContent = place ? `${venue.name} — ${place}` : venue.name;
+}
+
+function renderEvents(events, homeTeam, awayTeam) {
+  if (!events || events.length === 0) {
+    modalEvents.innerHTML = "";
+    return;
+  }
+  const rows = events
+    .map((e) => {
+      const icon = EVENT_ICONS[e.type] || "•";
+      const teamName = e.side === "home" ? homeTeam : e.side === "away" ? awayTeam : "";
+      const sideClass = e.side === "away" ? " event-side-away" : "";
+      const who = e.player ? `${e.player}${teamName ? ` (${teamName})` : ""}` : e.type;
+      return `
+        <div class="event-row${sideClass}">
+          <span class="event-minute">${e.minute || ""}</span>
+          <span class="event-icon">${icon}</span>
+          <span class="event-detail">${e.type}${e.player ? ` — ${who}` : ""}</span>
+        </div>`;
+    })
+    .join("");
+  modalEvents.innerHTML = `<div class="modal-events-title">Match Events</div>${rows}`;
+}
+
+function renderLiveModal(liveScore) {
+  if (!liveScore) {
+    modalScore.textContent = "–";
+    modalStatus.textContent = "";
+    modalNote.textContent = "Score unavailable right now — the source that mirrors live scores for this match hasn't picked it up. Still polling.";
+    modalVenue.textContent = "";
+    modalEvents.innerHTML = "";
+    return;
+  }
+  modalScore.textContent = `${liveScore.home} – ${liveScore.away}`;
+  modalStatus.textContent = liveScore.status || "";
+  modalNote.textContent = liveScore.is_final
+    ? "Match has finished."
+    : "";
+  renderVenue(liveScore.venue);
+  renderEvents(liveScore.events, liveModalMatch.home_team, liveModalMatch.away_team);
+}
+
+async function pollLiveModal() {
+  if (!liveModalMatch) return;
+  const params = new URLSearchParams({
+    home: liveModalMatch.home_team,
+    away: liveModalMatch.away_team,
+    league: liveModalMatch.league,
+    kickoff: liveModalMatch.kickoff || "",
+  });
+  try {
+    const res = await fetch(`/api/live-score?${params.toString()}`);
+    const data = await res.json();
+    if (res.ok) {
+      renderLiveModal(data.live_score);
+      modalUpdated.textContent = `updated ${new Date(data.generated_at).toLocaleTimeString()}`;
+    }
+  } catch (err) {
+    modalNote.textContent = `Couldn't reach the server: ${err.message}`;
+  }
+}
+
+function openLiveModal(match) {
+  liveModalMatch = match;
+  modalLeague.textContent = match.league;
+  modalTitle.textContent = `${match.home_team} vs ${match.away_team}`;
+  renderLiveModal(match.live_score);
+  modalUpdated.textContent = "";
+  modalBackdrop.classList.remove("hidden");
+
+  pollLiveModal();
+  liveModalTimer = setInterval(pollLiveModal, LIVE_POLL_INTERVAL_MS);
+}
+
+function closeLiveModal() {
+  modalBackdrop.classList.add("hidden");
+  liveModalMatch = null;
+  if (liveModalTimer) {
+    clearInterval(liveModalTimer);
+    liveModalTimer = null;
+  }
+}
+
+matchesEl.addEventListener("click", (event) => {
+  const card = event.target.closest(".card.is-live");
+  if (!card) return;
+  const match = lastMatches.find((m) => String(m.match_id) === card.dataset.matchId);
+  if (match) openLiveModal(match);
+});
+
+modalClose.addEventListener("click", closeLiveModal);
+modalBackdrop.addEventListener("click", (event) => {
+  if (event.target === modalBackdrop) closeLiveModal();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeLiveModal();
+});
