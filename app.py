@@ -1,6 +1,9 @@
 from datetime import datetime
 
+from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_from_directory
+
+load_dotenv()  # picks up GEMINI_API_KEY (etc.) from a local .env file, if present
 
 import ai_analysis
 import analysis

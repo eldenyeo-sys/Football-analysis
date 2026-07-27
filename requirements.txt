@@ -4,3 +4,4 @@ beautifulsoup4>=4.12
 lxml>=5.0
 gunicorn>=22.0
 google-genai>=1.0
+python-dotenv>=1.0

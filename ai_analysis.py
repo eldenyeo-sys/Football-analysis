@@ -15,8 +15,8 @@ from pathlib import Path
 from google import genai
 from google.genai import types
 
-MODEL = "gemini-2.5-flash"
-MAX_OUTPUT_TOKENS = 700
+MODEL = "gemini-flash-latest"  # alias for the current stable Flash model -- avoids pinned-version 404s
+MAX_OUTPUT_TOKENS = 2000  # generous headroom -- this model "thinks" by default and that eats into the same budget
 CACHE_DIR = Path(__file__).parent / "cache"
 CACHE_TTL_SECONDS = 900  # 15 min -- odds/form don't change fast enough to justify shorter
 
