@@ -112,6 +112,16 @@ function liveScoreBadge(match) {
     </div>`;
 }
 
+function sofascoreSearchUrl(homeTeam, awayTeam) {
+  // We don't scrape Sofascore (their ToS bans automated access), so this links
+  // to a search rather than a specific match page -- we have no way to know
+  // their internal match ID without scraping. site:-scoped Google search
+  // reliably lands on the right match page regardless of Sofascore's own URL
+  // scheme, which we don't otherwise have a reason to track.
+  const query = `site:sofascore.com ${homeTeam} vs ${awayTeam}`;
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
 function matchCard(match) {
   const p = match.prediction;
   return `
@@ -120,7 +130,10 @@ function matchCard(match) {
         <span>${match.league}</span>
         <span class="${match.is_live ? "live-badge" : ""}">${fmtKickoff(match.kickoff, match.is_live)}</span>
       </div>
-      <div class="teams">${match.home_team} vs ${match.away_team}</div>
+      <div class="teams">
+        ${match.home_team} vs ${match.away_team}
+        <a class="sofascore-link" href="${sofascoreSearchUrl(match.home_team, match.away_team)}" target="_blank" rel="noopener" title="Find this match on Sofascore for more stats">Sofascore &#8599;</a>
+      </div>
       ${match.is_live ? '<div class="watch-live-hint">Tap to watch live &rarr;</div>' : ""}
       ${liveScoreBadge(match)}
 
