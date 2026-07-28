@@ -2,6 +2,7 @@ const REFRESH_INTERVAL_MS = 20 * 1000;
 
 const matchesEl = document.getElementById("matches");
 const lastUpdatedEl = document.getElementById("last-updated");
+const sourceUpdatedEl = document.getElementById("source-updated");
 const refreshBtn = document.getElementById("refresh-btn");
 const countdownEl = document.getElementById("countdown");
 const confidenceFilterEl = document.getElementById("confidence-filter");
@@ -205,6 +206,14 @@ async function loadMatches() {
     lastMatches = data.matches;
     render();
     lastUpdatedEl.textContent = `Last updated ${new Date(data.generated_at).toLocaleTimeString()}`;
+    sourceUpdatedEl.textContent = data.source_last_updated
+      ? `SG Pools odds as of ${new Date(data.source_last_updated).toLocaleString(undefined, {
+          day: "numeric",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`
+      : "";
     secondsUntilRefresh = REFRESH_INTERVAL_MS / 1000;
   } catch (err) {
     matchesEl.innerHTML = `<div class="error-banner">Couldn't reach the server: ${err.message}</div>`;

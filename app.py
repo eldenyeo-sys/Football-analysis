@@ -52,6 +52,7 @@ def api_matches():
     try:
         matches = sgodds_client.get_upcoming_matches(limit=MATCHES_SHOWN)
         pool = sgodds_client.get_results_pool()
+        source_last_updated = sgodds_client.get_source_last_updated()
     except SgoddsError as exc:
         return jsonify({"error": str(exc)}), 502
     except Exception as exc:  # sgodds changed its page structure, etc.
@@ -95,7 +96,13 @@ def api_matches():
             }
         )
 
-    return jsonify({"generated_at": datetime.now().isoformat(), "matches": payload})
+    return jsonify(
+        {
+            "generated_at": datetime.now().isoformat(),
+            "source_last_updated": source_last_updated.isoformat() if source_last_updated else None,
+            "matches": payload,
+        }
+    )
 
 
 @app.route("/api/live-score")

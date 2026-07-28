@@ -94,6 +94,20 @@ def _parse_decimal_odds(cell) -> Optional[float]:
         return None
 
 
+def get_source_last_updated() -> Optional[datetime]:
+    """Parses the 'Last Updated on ...' timestamp sgodds prints on the current-odds
+    page, so the UI can show how fresh the underlying Singapore Pools-sourced odds
+    actually are (shares the same cached fetch as get_upcoming_matches)."""
+    html = _fetch_html(CURRENT_ODDS_URL, ttl_seconds=90)
+    match = re.search(r"Last Updated on (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", html)
+    if not match:
+        return None
+    try:
+        return datetime.strptime(match.group(1), "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
+
+
 def get_upcoming_matches(limit: int = 6) -> list:
     html = _fetch_html(CURRENT_ODDS_URL, ttl_seconds=90)
     soup = BeautifulSoup(html, "lxml")
