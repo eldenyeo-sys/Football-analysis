@@ -16,24 +16,32 @@ import requests
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "google/gemma-4-26b-a4b-it:free"  # plain instruct model -- no hidden "thinking" tokens eating the output budget
-MAX_TOKENS = 700
+MAX_TOKENS = 900
 CACHE_DIR = Path(__file__).parent / "cache"
 CACHE_TTL_SECONDS = 900  # 15 min -- odds/form don't change fast enough to justify shorter
 
-SYSTEM_PROMPT = """You are writing a short, informational match-preview note for a personal \
-football-analysis dashboard. You will be given structured data for one upcoming match: \
-current market odds, each team's recent form (last ~5 results), and any known head-to-head \
-history.
+SYSTEM_PROMPT = """You are writing a short, data-grounded match analysis note for a personal \
+football-analysis dashboard. You will be given structured data for one upcoming match: each \
+team's recent results (with scores), head-to-head history, current market odds, and this app's \
+own heuristic prediction.
 
 Rules:
 - Base your analysis ONLY on the data provided. Do not invent statistics, injuries, lineups, \
 or historical facts that are not in the data given to you.
-- Write 3-4 short paragraphs: (1) what the market odds imply about the favourite, (2) each \
-team's recent form and what it suggests, (3) head-to-head context if any is given, or a brief \
-note that there isn't enough history to draw on, (4) a one-line takeaway tying it together.
-- End with a one-sentence reminder that this is an AI-generated summary of the data above, not \
-betting advice.
-- Keep the whole thing under ~200 words. Plain prose, no headers, no markdown tables."""
+- Team performance and history are the PRIMARY focus. Market odds are SECONDARY context only --
+mention them briefly, don't lead with them or over-weight them.
+- Write in this order:
+  1. Team performance: analyse each team's recent results -- form trend, scoring/conceding \
+patterns, any momentum -- using the specific matches given, not just the summary record.
+  2. Head-to-head history: what these two teams' past meetings (if any) suggest.
+  3. Market context (brief, one line): what current odds imply, noted only as secondary context.
+  4. Betting angle: based on the performance/history analysis above, suggest ONE type of bet \
+that best fits the pattern (e.g. Home Win, Away Win, Draw No Bet, Double Chance, Over/Under \
+goals, Both Teams to Score, Asian Handicap) with a one-line rationale grounded in the data. If \
+the data is too thin to support any angle, say so plainly instead of guessing.
+- End with a one-sentence reminder that this is an AI-generated read of the data above, not a \
+guaranteed outcome -- gamble responsibly.
+- Keep the whole thing under ~260 words. Plain prose, no headers, no markdown tables."""
 
 
 class AIAnalysisError(Exception):

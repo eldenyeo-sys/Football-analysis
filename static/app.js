@@ -390,26 +390,34 @@ const aiModalClose = document.getElementById("ai-modal-close");
 const aiModalTitle = document.getElementById("ai-modal-title");
 const aiModalBody = document.getElementById("ai-modal-body");
 
+function recentResultsSummary(form) {
+  return (form.matches || []).map(
+    (m) => `${m.date || "?"}: vs ${m.opponent} ${m.score} (${m.result}, ${m.league})`
+  );
+}
+
 function buildAIContext(match) {
   return {
     home_team: match.home_team,
     away_team: match.away_team,
     league: match.league,
-    odds: match.odds,
-    prediction: match.prediction,
     home_form: {
       record: match.home_form.record,
       ppg: match.home_form.ppg,
       gd_pg: match.home_form.gd_pg,
+      recent_results: recentResultsSummary(match.home_form),
     },
     away_form: {
       record: match.away_form.record,
       ppg: match.away_form.ppg,
       gd_pg: match.away_form.gd_pg,
+      recent_results: recentResultsSummary(match.away_form),
     },
     head_to_head: (match.head_to_head || [])
       .slice(0, 5)
       .map((m) => `${m.date}: ${m.home_team} ${m.score} ${m.away_team} (${m.league})`),
+    odds: match.odds,
+    prediction: match.prediction,
   };
 }
 
