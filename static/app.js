@@ -421,6 +421,32 @@ function buildAIContext(match) {
   };
 }
 
+const AI_SECTION_LABELS = {
+  performance: "Team Performance",
+  head_to_head: "Head-to-Head",
+  market: "Market Context",
+  betting_angle: "Betting Angle",
+};
+const AI_SECTION_ORDER = ["performance", "head_to_head", "market", "betting_angle"];
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function renderAISections(sections) {
+  const blocks = AI_SECTION_ORDER.filter((key) => sections[key]).map(
+    (key) => `
+      <div class="ai-section ai-section-${key}">
+        <div class="ai-section-title">${AI_SECTION_LABELS[key]}</div>
+        <p>${escapeHtml(sections[key])}</p>
+      </div>`
+  );
+  return blocks.join("") || `<p class="no-data">No analysis returned.</p>`;
+}
+
 async function openAIModal(match) {
   aiModalTitle.textContent = `${match.home_team} vs ${match.away_team}`;
   aiModalBody.innerHTML = '<p class="no-data">Generating analysis&hellip;</p>';
@@ -437,7 +463,7 @@ async function openAIModal(match) {
       aiModalBody.innerHTML = `<p class="no-data">Couldn't generate analysis: ${data.error || res.statusText}</p>`;
       return;
     }
-    aiModalBody.textContent = data.analysis;
+    aiModalBody.innerHTML = renderAISections(data.analysis || {});
   } catch (err) {
     aiModalBody.innerHTML = `<p class="no-data">Couldn't reach the server: ${err.message}</p>`;
   }

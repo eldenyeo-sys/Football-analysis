@@ -393,10 +393,49 @@ main {
   text-align: left;
   font-size: 0.9rem;
   line-height: 1.6;
-  white-space: pre-wrap;
   margin: 16px 0;
   max-height: 400px;
   overflow-y: auto;
+}
+
+.ai-section {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ai-section:first-child {
+  padding-top: 0;
+}
+
+.ai-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.ai-section p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.ai-section-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.ai-section-betting_angle {
+  background: rgba(91, 141, 239, 0.08);
+  border: 1px solid rgba(91, 141, 239, 0.3);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 4px;
+}
+
+.ai-section-betting_angle .ai-section-title {
+  color: var(--accent);
 }
 
 .ai-modal-disclaimer {
