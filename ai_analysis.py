@@ -1,9 +1,9 @@
 """
-Generates a short natural-language match-preview writeup via Google's Gemini
-API (free tier, no credit card required), built entirely from data already
-computed elsewhere in the app (odds, recent form, head-to-head). The model
-synthesizes what's given; it isn't a fresh prediction source and doesn't get
-to invent facts.
+Generates a short natural-language match-preview writeup via OpenRouter (a
+free-tier-friendly API gateway to many hosted models), built entirely from
+data already computed elsewhere in the app (odds, recent form, head-to-head).
+The model synthesizes what's given; it isn't a fresh prediction source and
+doesn't get to invent facts.
 """
 
 import hashlib
@@ -12,11 +12,11 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from google import genai
-from google.genai import types
+import requests
 
-MODEL = "gemini-flash-latest"  # alias for the current stable Flash model -- avoids pinned-version 404s
-MAX_OUTPUT_TOKENS = 2000  # generous headroom -- this model "thinks" by default and that eats into the same budget
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+MODEL = "google/gemma-4-26b-a4b-it:free"  # plain instruct model -- no hidden "thinking" tokens eating the output budget
+MAX_TOKENS = 700
 CACHE_DIR = Path(__file__).parent / "cache"
 CACHE_TTL_SECONDS = 900  # 15 min -- odds/form don't change fast enough to justify shorter
 
@@ -40,15 +40,15 @@ class AIAnalysisError(Exception):
     """Raised when the analysis can't be generated (missing key, API error, empty response)."""
 
 
-def _client() -> genai.Client:
-    api_key = os.environ.get("GEMINI_API_KEY")
+def _api_key() -> str:
+    api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise AIAnalysisError(
-            "GEMINI_API_KEY is not set. Get a free key (no credit card needed) at "
-            "https://aistudio.google.com/apikey and set it in your environment "
+            "OPENROUTER_API_KEY is not set. Get a free key (no credit card needed) at "
+            "https://openrouter.ai/settings/keys and set it in your environment "
             "(e.g. a .env file) to enable AI analysis."
         )
-    return genai.Client(api_key=api_key)
+    return api_key
 
 
 def _cache_path(match_context: dict) -> Path:
@@ -68,7 +68,7 @@ def generate_analysis(match_context: dict) -> str:
         except (json.JSONDecodeError, KeyError, ValueError):
             pass  # fall through and regenerate
 
-    client = _client()
+    api_key = _api_key()
     user_content = (
         "Match data (JSON):\n"
         + json.dumps(match_context, indent=2)
@@ -76,22 +76,32 @@ def generate_analysis(match_context: dict) -> str:
     )
 
     try:
-        response = client.models.generate_content(
-            model=MODEL,
-            contents=user_content,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                max_output_tokens=MAX_OUTPUT_TOKENS,
-            ),
+        response = requests.post(
+            OPENROUTER_URL,
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": MODEL,
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_content},
+                ],
+                "max_tokens": MAX_TOKENS,
+            },
+            timeout=30,
         )
-    except Exception as exc:  # google-genai's own exception types aren't pinned here
-        raise AIAnalysisError(f"Gemini API error: {exc}") from exc
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException as exc:
+        raise AIAnalysisError(f"OpenRouter API error: {exc}") from exc
 
-    text = (getattr(response, "text", None) or "").strip()
+    if "error" in data:
+        raise AIAnalysisError(f"OpenRouter API error: {data['error'].get('message', data['error'])}")
+
+    text = (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
     if not text:
         raise AIAnalysisError(
-            "Gemini returned an empty response (the request may have been blocked by "
-            "its safety filters)."
+            "OpenRouter returned an empty response (the chosen free model may be temporarily "
+            "rate-limited upstream -- try again shortly)."
         )
 
     CACHE_DIR.mkdir(parents=True, exist_ok=True)

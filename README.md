@@ -53,22 +53,27 @@ Then open [http://localhost:5000](http://localhost:5000) in your browser.
 ## AI Analysis (optional)
 
 Clicking "✨ AI Analysis" on a match card generates a short natural-language writeup via
-**Google's Gemini API** (free tier, no credit card required) — built only from the odds/form/H2H
+**OpenRouter** (free tier, no credit card required) — built only from the odds/form/H2H
 already shown on that card; it's instructed not to invent facts, and results are cached for 15
-minutes per match.
+minutes per match. The model used (`google/gemma-4-26b-a4b-it:free`) is a plain instruct model,
+not a "thinking" model, so its full output budget goes to the actual writeup.
 
 To enable it:
 
-1. Get a free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (sign in
-   with a Google account, no billing setup needed).
+1. Get a free key at [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) (sign in,
+   no billing setup needed for free-tier models).
 2. Set it as an environment variable before running the app:
    ```bash
-   export GEMINI_API_KEY="your-key-here"
+   export OPENROUTER_API_KEY="your-key-here"
    ```
 3. Restart `python app.py`.
 
-Without a key, the button still works but shows a clear "set GEMINI_API_KEY" message instead of
-crashing.
+Without a key, the button still works but shows a clear "set OPENROUTER_API_KEY" message instead
+of crashing.
+
+OpenRouter's free-tier model roster changes often — if `google/gemma-4-26b-a4b-it:free` gets
+delisted or rate-limited, swap `MODEL` in `ai_analysis.py` for another `:free` model from
+[openrouter.ai/models](https://openrouter.ai/models?max_price=0).
 
 ## Deploying online (Render)
 
