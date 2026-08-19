@@ -12,14 +12,23 @@ import os
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Optional
 
 import requests
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "google/gemma-4-26b-a4b-it:free"  # plain instruct model -- no hidden "thinking" tokens eating the output budget
-MAX_TOKENS = 900
+# Plain instruct models only -- no hidden "thinking" tokens eating the output budget. Tried in
+# order; free-tier models get rate-limited/at-capacity often enough that a fallback meaningfully
+# cuts how often a click fails outright and has to be manually retried.
+MODELS = ["google/gemma-4-26b-a4b-it:free", "google/gemma-4-31b-it:free"]
+MAX_TOKENS = 500  # ~260-word target is well under this; caps worst-case generation time
+REQUEST_TIMEOUT_SECONDS = 15  # fail fast into the next fallback model rather than hang
 CACHE_DIR = Path(__file__).parent / "cache"
 CACHE_TTL_SECONDS = 900  # 15 min -- odds/form don't change fast enough to justify shorter
+
+# Reused across requests so repeated calls keep the TLS/TCP connection alive instead of
+# renegotiating a new one every time (this endpoint is called on every "AI Analysis" click).
+_session = requests.Session()
 
 # Ordered section keys -> the exact heading text the model is asked to emit on its own line.
 SECTION_HEADINGS = {
@@ -80,7 +89,11 @@ def _api_key() -> str:
 
 
 def _cache_path(match_context: dict) -> Path:
-    stable = json.dumps(match_context, sort_keys=True)
+    # odds/prediction tick on every ~20s auto-refresh but don't materially change the analysis
+    # (they're secondary context) -- excluding them from the key keeps a still-fresh cached
+    # analysis a cache hit instead of forcing a fresh, slow API call every time the odds shift.
+    cache_key_context = {k: v for k, v in match_context.items() if k not in ("odds", "prediction")}
+    stable = json.dumps(cache_key_context, sort_keys=True)
     key = hashlib.sha256(stable.encode()).hexdigest()[:24]
     return CACHE_DIR / f"ai_{key}.json"
 
@@ -128,34 +141,38 @@ def generate_analysis(match_context: dict) -> dict:
         + json.dumps(match_context, indent=2)
         + "\n\nWrite the match analysis now."
     )
+    payload_messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_content},
+    ]
 
-    try:
-        response = requests.post(
-            OPENROUTER_URL,
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={
-                "model": MODEL,
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_content},
-                ],
-                "max_tokens": MAX_TOKENS,
-            },
-            timeout=30,
-        )
-        response.raise_for_status()
-        data = response.json()
-    except requests.RequestException as exc:
-        raise AIAnalysisError(f"OpenRouter API error: {exc}") from exc
+    text = ""
+    last_error: Optional[str] = None
+    for model in MODELS:
+        try:
+            response = _session.post(
+                OPENROUTER_URL,
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={"model": model, "messages": payload_messages, "max_tokens": MAX_TOKENS},
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+            data = response.json()
+        except requests.RequestException as exc:
+            last_error = f"OpenRouter API error ({model}): {exc}"
+            continue
 
-    if "error" in data:
-        raise AIAnalysisError(f"OpenRouter API error: {data['error'].get('message', data['error'])}")
+        if not response.ok or "error" in data:
+            last_error = f"OpenRouter API error ({model}): {data.get('error', response.text)}"
+            continue
 
-    text = (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
+        text = (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
+        if text:
+            break
+        last_error = f"OpenRouter returned an empty response ({model})"
+
     if not text:
         raise AIAnalysisError(
-            "OpenRouter returned an empty response (the chosen free model may be temporarily "
-            "rate-limited upstream -- try again shortly)."
+            last_error or "OpenRouter returned an empty response -- try again shortly."
         )
 
     sections = _parse_sections(text)
